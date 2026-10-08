@@ -1,0 +1,50 @@
+name: Build TDLib for Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      interface:
+        description: "TDLib interface"
+        type: choice
+        options:
+          - Java
+          - JSON
+          - JSONJava
+        default: Java
+      commit:
+        description: "TDLib commit hash (empty = latest master)"
+        type: string
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+      - name: Check out TDLib Android example
+        uses: actions/checkout@v4
+        with:
+          repository: tdlib/td
+          ref: ${{ inputs.commit || 'master' }}
+          sparse-checkout: example/android
+
+      - name: Build with Docker
+        working-directory: example/android
+        run: |
+          ARGS="--build-arg TDLIB_INTERFACE=${{ inputs.interface }}"
+          if [ -n "${{ inputs.commit }}" ]; then
+            ARGS="$ARGS --build-arg COMMIT_HASH=${{ inputs.commit }}"
+          fi
+          docker build $ARGS --output tdlib .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdlib-android-${{ inputs.interface }}
+          path: example/android/tdlib/
